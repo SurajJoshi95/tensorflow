@@ -1,0 +1,123 @@
+# import tensorflow
+import tensorflow as tf
+
+#placeholder: A way to feed data into the graphs
+#feed_dict: A dictionary to pass numeric values to computational graph
+
+# implementing neural networks
+import os
+import numpy as np
+import pandas as pd
+from scipy.misc import imread
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import accuracy_score
+
+seed=100
+rng=np.random.RandomState(seed)
+
+train=pd.read_excel("D:/NP/dccc.xls",one_hot=True)
+train=pd.DataFrame(train)
+train.shape
+
+# Splitting data into train and test
+from sklearn.cross_validation import train_test_split
+
+x_train ,x_test = train_test_split(train,test_size=0.2)  
+x_train_label=x_train.iloc[:,-1].values
+x_test_label=x_test.iloc[:,-1].values
+x_test=x_test.iloc[:,0:23].values
+x_train=x_train.iloc[:,0:23].values
+x_train.shape
+
+
+# one hot function
+def one_hot_encoding(labels,number_of_classes=2):
+    index_offset=np.arange(labels)*number_of_classes
+    labels_one_hot=np.zeros((index_offset,number_of_classes))
+    labels_one_hot.flat[index_offset]=1
+    return labels_one_hot
+    
+#creating batch creator
+def batch_creator(batch_size,dataset_length,dataset_name):
+    # creating batches with random samples
+    batch_mask=rng.choice(dataset_length,batch_size)
+    batch_x=eval('x_'+dataset_name)[[batch_mask]].reshape(-1,input_num_unit)
+    if dataset_name == 'train':
+        batch_y = eval('x_'+dataset_name+'_label')[[batch_mask]]
+        #batch_y = dense_to_one_hot(batch_y)
+    return batch_x, batch_y
+    
+ # set number of neurons for each layers
+input_num_unit=23
+hidden_num_units=200
+output_num_unit=2
+
+# defining placeholder for input and hidden layer
+x=tf.placeholder(tf.float32,[None,input_num_unit])
+y=tf.placeholder(tf.float32,[None,output_num_unit])
+
+# setting other variables
+epochs=5
+batch_size=128
+learning_rate=0.01
+
+# define weight and bias of the neural network
+
+weights={'hidden':tf.Variable(tf.random_normal([input_num_unit,hidden_num_units],seed=seed)),
+        'output':tf.Variable(tf.random_normal([hidden_num_units,output_num_unit],seed=seed))}
+biases={
+    'hidden':tf.Variable(tf.random_normal([hidden_num_units],seed=seed)),
+    'output':tf.Variable(tf.random_normal([output_num_unit],seed=seed))
+}
+
+# create neural network computational graph
+#for hidden layer
+hidden_layer=tf.add(tf.matmul(x,weights['hidden']),biases['hidden'])
+hidden_layer=tf.nn.relu(hidden_layer)
+
+#for output layer
+output_layer=tf.matmul(hidden_layer,weights['output'])+biases['output']
+
+# cost of neural network // calculate probabilities at evey neuron (output) and results the one which is having the highest probability
+cost=tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y,logits=output_layer))
+
+#using adam for optimization
+optimizer=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
+#initializing all variables
+init=tf.initialize_all_variables()
+
+# creating tensorflow session
+with tf.Session() as sess:
+    # create initialized variables
+    sess.run(init)
+    for epoch in range(epochs):
+        avg_cost=0
+        total_batch=int(train.shape[0]/batch_size)
+        for i in range(total_batch):
+            batch_x,batch_y=batch_creator(batch_size,x_train.shape[0],'train')
+            _, c = sess.run([optimizer,cost],feed_dict={x:batch_x,y:batch_y})
+            avg_cost += c/total_batch
+        print("Epoch:",(epoch+1),"Cost =","{:.5f}",avg_cost)
+    print("\n Training Compleated")
+    
+    
+# find predictions
+#pred_temp=tf.equal(tf.argmax(output_layer,1),tf.argmax(y,1))
+#accuracy=tf.reduce_mean(tf.cast(pred_temp,"float"))
+#print("Accuracy",accuracy.eval({x:x_test.reshape(-1,input_num_unit),y:dense_to_one_hot(x_test_label)}))
+
+#predict=tf.argmax(output_layer,1)
+#pred=predict.eval({x:x_test.reshape(-1,input_num_unit)})
+#with tf.Session() as ses:
+   # predict=tf.argmax(output_layer,1)
+   # pred=predict.eval({x:x_test.reshape(-1,input_num_unit)})
+   # confusion_matrix=tf.confusion_matrix(labels=x_test_label,predictions=pred,num_classes=2)
+   # ses.run(pred)
+
+# confusion matrix
+#confusion_matrix=tf.confusion_matrix(labels=x_test_label,predictions=pred,num_classes=2)
+
+pred=tf.equal(tf.argmax(output_layer,1),tf.argmax(y,1))
+accuracy=tf.reduce_mean(tf.cast(pred,"float"))
+print(pred.eval({x:x_train.reshape(-1,input_num_unit),y:dense_to_one_hot(x_train_label)}
